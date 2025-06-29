@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Производственные показатели</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Показатели цехов предприятия</h1>
+        
+        <div class="controls">
+            <input type="text" id="sheetIdInput" placeholder="Введите ID Google-таблицы" 
+                   value="1XqOtPkiE_Q0dfGS9xV3FmBqJ2nZW3qWztrQST7VQhy4">
+            <button onclick="loadData()">Загрузить данные</button>
+        </div>
+        
+        <div class="charts">
+            <div class="chart-container">
+                <canvas id="outputChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="defectsChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="downtimeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
