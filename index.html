@@ -3,29 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Производственные показатели</title>
+    <title>Аналитика производства</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>Показатели цехов предприятия</h1>
+        <h1>Аналитика производственных показателей</h1>
         
         <div class="controls">
-            <p>Данные загружаются из файла data.csv</p>
-            <button onclick="loadData()">Обновить данные</button>
+            <div class="file-upload">
+                <input type="file" id="csvUpload" accept=".csv" style="display: none;">
+                <button onclick="document.getElementById('csvUpload').click()">📁 Загрузить CSV</button>
+                <p id="fileName">Файл не выбран</p>
+            </div>
+            
+            <div class="actions">
+                <button onclick="saveData()">💾 Сохранить данные</button>
+                <button onclick="loadSavedData()">🔄 Загрузить сохранённые данные</button>
+                <button onclick="exportToPDF()">📊 Экспорт в PDF</button>
+            </div>
         </div>
         
-        <div class="charts">
-            <div class="chart-container">
-                <canvas id="outputChart"></canvas>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="monthly">Помесячные данные</button>
+            <button class="tab-btn" data-tab="quarterly">Квартальные отчёты</button>
+            <button class="tab-btn" data-tab="annual">Годовые отчёты</button>
+        </div>
+        
+        <div id="monthly" class="tab-content active">
+            <div class="chart-section">
+                <h2>Графики по цехам</h2>
+                <div class="workshop-selector">
+                    <label for="workshopSelect">Выберите цех:</label>
+                    <select id="workshopSelect"></select>
+                </div>
+                <div class="charts-container" id="workshopCharts"></div>
             </div>
-            <div class="chart-container">
-                <canvas id="defectsChart"></canvas>
+            
+            <div class="chart-section">
+                <h2>Графики по месяцам</h2>
+                <div class="month-selector">
+                    <label for="monthSelect">Выберите месяц:</label>
+                    <select id="monthSelect"></select>
+                </div>
+                <div class="charts-container" id="monthCharts"></div>
             </div>
-            <div class="chart-container">
-                <canvas id="downtimeChart"></canvas>
-            </div>
+        </div>
+        
+        <div id="quarterly" class="tab-content">
+            <div class="report-container" id="quarterlyReports"></div>
+        </div>
+        
+        <div id="annual" class="tab-content">
+            <div class="report-container" id="annualReports"></div>
         </div>
     </div>
 
