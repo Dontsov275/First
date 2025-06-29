@@ -1,3 +1,60 @@
+// Проверка загрузки библиотек
+function checkLibraries() {
+  const errors = [];
+  
+  if (typeof Chart === 'undefined') {
+    errors.push("Chart.js");
+    // Попытка динамической загрузки
+    document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>');
+  }
+  
+  if (typeof jsPDF === 'undefined') {
+    errors.push("jsPDF");
+    // Попытка динамической загрузки
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');
+    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"><\/script>');
+  }
+  
+  if (errors.length > 0) {
+    console.error("Не загружены: " + errors.join(", "));
+    return false;
+  }
+  
+  return true;
+}
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+  if (!checkLibraries()) {
+    const errorHtml = `
+      <div class="error">
+        <h2>Ошибка загрузки</h2>
+        <p>Не удалось загрузить необходимые библиотеки. Пожалуйста:</p>
+        <ol>
+          <li>Проверьте интернет-соединение</li>
+          <li>Обновите страницу (F5)</li>
+          <li>Если проблема сохраняется, попробуйте другой браузер</li>
+        </ol>
+      </div>
+    `;
+    document.body.innerHTML = errorHtml + document.body.innerHTML;
+    return;
+  }
+  
+  initApp(); // Основная инициализация приложения
+});
+
+
+
+
+
+
+
+
+
+
+
+
 // Конфигурация приложения
 const config = {
     workshopsCount: 20,
