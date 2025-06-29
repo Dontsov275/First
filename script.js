@@ -1,63 +1,69 @@
-// Конфигурация цехов
-const workshops = [
-    { id: 1, name: "Цех №1", color: "rgba(54, 162, 235, 0.7)" },
-    { id: 2, name: "Цех №2", color: "rgba(255, 99, 132, 0.7)" },
-    { id: 3, name: "Цех №3", color: "rgba(75, 192, 192, 0.7)" },
-    { id: 4, name: "Цех №4", color: "rgba(255, 159, 64, 0.7)" },
-    { id: 5, name: "Цех №5", color: "rgba(153, 102, 255, 0.7)" }
+// Конфигурация цветов
+const colors = [
+    "rgba(54, 162, 235, 0.7)",
+    "rgba(255, 99, 132, 0.7)",
+    "rgba(75, 192, 192, 0.7)",
+    "rgba(255, 159, 64, 0.7)",
+    "rgba(153, 102, 255, 0.7)"
 ];
 
-// Загрузка данных из Google Sheets
+// Загрузка данных
 async function loadData() {
-    const sheetId = document.getElementById('sheetIdInput').value.trim();
-    if (!sheetId) return alert("Введите ID Google-таблицы");
-    
     try {
         showLoader(true);
-        const response = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`);
-        if (!response.ok) throw new Error("Ошибка загрузки");
+        const response = await fetch('data.csv');
+        if (!response.ok) throw new Error("Ошибка загрузки CSV");
         
-        const text = await response.text();
-        const json = JSON.parse(text.substr(47).slice(0, -2));
-        processData(json);
+        const csvText = await response.text();
+        const data = parseCSV(csvText);
+        processData(data);
     } catch (error) {
         console.error("Ошибка:", error);
-        alert("Ошибка загрузки: " + error.message);
+        alert("Ошибка загрузки данных: " + error.message);
     } finally {
         showLoader(false);
     }
 }
 
+// Парсинг CSV
+function parseCSV(csvText) {
+    const lines = csvText.split('\n').filter(line => line.trim() !== '');
+    const headers = lines[0].split(',').map(h => h.trim());
+    
+    return lines.slice(1).map(line => {
+        const values = line.split(',');
+        return headers.reduce((obj, header, index) => {
+            obj[header] = values[index] ? values[index].trim() : '';
+            return obj;
+        }, {});
+    });
+}
+
 // Обработка данных
-function processData(jsonData) {
-    const rows = jsonData.table.rows;
-    const months = [];
+function processData(csvData) {
+    const workshops = [...new Set(csvData.map(row => row['Цех']))].sort();
+    const months = [...new Set(csvData.map(row => row['Месяц']))].sort();
+    
     const metrics = {
-        output: workshops.map(w => ({ ...w, data: [] })),
-        defects: workshops.map(w => ({ ...w, data: [] })),
-        downtime: workshops.map(w => ({ ...w, data: [] }))
+        output: prepareDataset('Выпуск', workshops, months, csvData),
+        defects: prepareDataset('Брак', workshops, months, csvData),
+        downtime: prepareDataset('Простой', workshops, months, csvData)
     };
     
-    // Собираем уникальные месяцы
-    rows.forEach(row => {
-        const month = row.c[1]?.v;
-        if (month && !months.includes(month)) months.push(month);
-    });
-    
-    // Заполняем данные
-    months.forEach(month => {
-        workshops.forEach((workshop, i) => {
-            const row = rows.find(r => 
-                r.c[0]?.v === workshop.id && r.c[1]?.v === month
-            );
-            
-            metrics.output[i].data.push(row?.c[2]?.v || 0);
-            metrics.defects[i].data.push(row?.c[3]?.v || 0);
-            metrics.downtime[i].data.push(row?.c[4]?.v || 0);
-        });
-    });
-    
     renderCharts(metrics, months);
+}
+
+function prepareDataset(metric, workshops, months, csvData) {
+    return workshops.map((workshop, index) => ({
+        label: `Цех №${workshop}`,
+        data: months.map(month => {
+            const row = csvData.find(r => r['Цех'] === workshop && r['Месяц'] === month);
+            return row ? parseFloat(row[metric]) || 0 : 0;
+        }),
+        backgroundColor: colors[index],
+        borderColor: colors[index].replace('0.7', '1'),
+        borderWidth: 1
+    }));
 }
 
 // Отрисовка графиков
@@ -76,13 +82,7 @@ function renderChart(canvasId, title, datasets, labels) {
         type: 'bar',
         data: {
             labels: labels,
-            datasets: datasets.map(ws => ({
-                label: ws.name,
-                data: ws.data,
-                backgroundColor: ws.color,
-                borderColor: ws.color.replace('0.7', '1'),
-                borderWidth: 1
-            }))
+            datasets: datasets
         },
         options: {
             responsive: true,
@@ -107,12 +107,10 @@ function renderChart(canvasId, title, datasets, labels) {
 
 // Показать/скрыть загрузчик
 function showLoader(show) {
-    const btn = document.querySelector('.controls button');
+    const btn = document.querySelector('button');
     btn.disabled = show;
-    btn.innerHTML = show ? 'Загрузка...' : 'Загрузить данные';
+    btn.textContent = show ? 'Загрузка...' : 'Обновить данные';
 }
 
 // Автозагрузка при открытии
-document.addEventListener('DOMContentLoaded', () => {
-    loadData();
-});
+document.addEventListener('DOMContentLoaded', loadData);
