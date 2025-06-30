@@ -1,60 +1,3 @@
-// Проверка загрузки библиотек
-function checkLibraries() {
-  const errors = [];
-  
-  if (typeof Chart === 'undefined') {
-    errors.push("Chart.js");
-    // Попытка динамической загрузки
-    document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>');
-  }
-  
-  if (typeof jsPDF === 'undefined') {
-    errors.push("jsPDF");
-    // Попытка динамической загрузки
-    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>');
-    document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"><\/script>');
-  }
-  
-  if (errors.length > 0) {
-    console.error("Не загружены: " + errors.join(", "));
-    return false;
-  }
-  
-  return true;
-}
-
-// Инициализация при загрузке
-document.addEventListener('DOMContentLoaded', function() {
-  if (!checkLibraries()) {
-    const errorHtml = `
-      <div class="error">
-        <h2>Ошибка загрузки</h2>
-        <p>Не удалось загрузить необходимые библиотеки. Пожалуйста:</p>
-        <ol>
-          <li>Проверьте интернет-соединение</li>
-          <li>Обновите страницу (F5)</li>
-          <li>Если проблема сохраняется, попробуйте другой браузер</li>
-        </ol>
-      </div>
-    `;
-    document.body.innerHTML = errorHtml + document.body.innerHTML;
-    return;
-  }
-  
-  initApp(); // Основная инициализация приложения
-});
-
-
-
-
-
-
-
-
-
-
-
-
 // Конфигурация приложения
 const config = {
     workshopsCount: 20,
@@ -91,18 +34,25 @@ let appData = {
     annualData: {},
     lastUploadedFile: null
 };
+
 // Инициализация приложения
 function initApp() {
+    console.log("Инициализация приложения...");
     setupFileUpload();
     setupUI();
-    loadInitialData();
     setupEventListeners();
+    loadInitialData();
 }
 
 // Настройка загрузки файлов
 function setupFileUpload() {
     const fileInput = document.getElementById('csvUpload');
     const fileNameDisplay = document.getElementById('fileName');
+    
+    if (!fileInput || !fileNameDisplay) {
+        console.error("Не найдены элементы для загрузки файлов");
+        return;
+    }
     
     fileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
@@ -122,10 +72,14 @@ function setupFileUpload() {
                 processData(data);
                 saveData();
                 updateUI();
+                showNotification("Данные успешно загружены!", "success");
             } catch (error) {
                 console.error("Ошибка обработки файла:", error);
-                alert(`Ошибка: ${error.message}`);
+                showNotification(`Ошибка: ${error.message}`, "error");
             }
+        };
+        reader.onerror = () => {
+            showNotification("Ошибка чтения файла", "error");
         };
         reader.readAsText(file);
     });
@@ -148,7 +102,6 @@ function parseCSV(csvText) {
         return headers.reduce((obj, header, index) => {
             let value = values[index] ? values[index].trim() : '';
             
-            // Преобразование числовых значений
             if (header !== 'Цех' && header !== 'Месяц' && !isNaN(value)) {
                 value = parseFloat(value);
             }
@@ -158,6 +111,7 @@ function parseCSV(csvText) {
         }, {});
     }).filter(row => row['Цех'] && row['Месяц']);
 }
+
 // Основная обработка данных
 function processData(data) {
     try {
@@ -235,24 +189,98 @@ function calculateQuarterlyData() {
         });
     });
 }
-// Отрисовка графиков
-function renderCharts() {
-    renderWorkshopCharts();
-    renderMonthCharts();
-    renderQuarterlyReports();
-    renderAnnualReports();
+
+// Расчет годовых показателей
+function calculateAnnualData() {
+    appData.annualData = {};
+    
+    appData.workshops.forEach(workshop => {
+        const annualData = {
+            'Выпуск': 0,
+            'Брак': 0,
+            'Простой': 0,
+            'Численность': 0,
+            'Изготовлено': 0,
+            'Себестоимость': 0,
+            'ВаловаяПрибыль': 0,
+            'EBITDA': 0,
+            'ЧистаяПрибыль': 0
+        };
+        
+        let monthCount = 0;
+        config.months.forEach(month => {
+            const monthData = appData.monthlyData[workshop][month];
+            if (monthData && monthData['Выпуск']) {
+                config.indicators.forEach(indicator => {
+                    if (annualData.hasOwnProperty(indicator) && monthData[indicator]) {
+                        annualData[indicator] += parseFloat(monthData[indicator]) || 0;
+                    }
+                });
+                monthCount++;
+            }
+        });
+        
+        // Расчет средних значений
+        if (monthCount > 0) {
+            ['Брак', 'Простой', 'ПроцентОтПлана', 'Маржинальность', 'Рентабельность'].forEach(indicator => {
+                if (annualData.hasOwnProperty(indicator)) {
+                    annualData[indicator] = annualData[indicator] / monthCount;
+                }
+            });
+        }
+        
+        appData.annualData[workshop] = annualData;
+    });
 }
 
-// Графики по цехам
-function renderWorkshopCharts() {
-    const container = document.getElementById('workshopCharts');
-    if (!container) return;
+// Настройка UI
+function setupUI() {
+    setupTabs();
+    renderWorkshopSelect();
+    renderMonthSelect();
+}
+
+// Настройка вкладок
+function setupTabs() {
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
     
-    container.innerHTML = '';
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabId = button.getAttribute('data-tab');
+            
+            // Скрыть все содержимое вкладок
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Деактивировать все кнопки
+            tabButtons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Показать выбранную вкладку
+            document.getElementById(tabId).classList.add('active');
+            button.classList.add('active');
+            
+            // Обновить данные для активной вкладки
+            if (tabId === 'monthly') {
+                updateWorkshopCharts(appData.workshops[0]);
+                updateMonthCharts(config.months[0]);
+            } else if (tabId === 'quarterly') {
+                renderQuarterlyReports();
+            } else if (tabId === 'annual') {
+                renderAnnualReports();
+            }
+        });
+    });
+}
+
+// Заполнение выпадающего списка цехов
+function renderWorkshopSelect() {
     const workshopSelect = document.getElementById('workshopSelect');
     if (!workshopSelect) return;
     
-    // Заполнение выпадающего списка цехов
     workshopSelect.innerHTML = '';
     appData.workshops.forEach(workshop => {
         const option = document.createElement('option');
@@ -261,25 +289,36 @@ function renderWorkshopCharts() {
         workshopSelect.appendChild(option);
     });
     
-    // Отрисовка графиков для первого цеха
-    if (appData.workshops.length > 0) {
-        updateWorkshopCharts(appData.workshops[0]);
-    }
-    
-    // Обработчик изменения выбора цеха
     workshopSelect.addEventListener('change', (e) => {
         updateWorkshopCharts(parseInt(e.target.value));
     });
 }
 
-// Обновление графиков для конкретного цеха
+// Заполнение выпадающего списка месяцев
+function renderMonthSelect() {
+    const monthSelect = document.getElementById('monthSelect');
+    if (!monthSelect) return;
+    
+    monthSelect.innerHTML = '';
+    config.months.forEach(month => {
+        const option = document.createElement('option');
+        option.value = month;
+        option.textContent = month;
+        monthSelect.appendChild(option);
+    });
+    
+    monthSelect.addEventListener('change', (e) => {
+        updateMonthCharts(e.target.value);
+    });
+}
+
+// Обновление графиков по цехам
 function updateWorkshopCharts(workshopId) {
     const container = document.getElementById('workshopCharts');
     if (!container || !appData.monthlyData[workshopId]) return;
     
     container.innerHTML = '';
     
-    // Создаем графики для каждого показателя
     config.indicators.forEach(indicator => {
         const chartData = {
             labels: config.months,
@@ -306,55 +345,221 @@ function updateWorkshopCharts(workshopId) {
     });
 }
 
+// Обновление графиков по месяцам
+function updateMonthCharts(month) {
+    const container = document.getElementById('monthCharts');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    config.indicators.forEach(indicator => {
+        const chartData = {
+            labels: appData.workshops.map(w => `Цех ${w}`),
+            datasets: [{
+                label: `${indicator} (${month})`,
+                data: appData.workshops.map(workshop => 
+                    appData.monthlyData[workshop][month][indicator] || 0
+                ),
+                backgroundColor: colors,
+                borderColor: colors.map(c => c.replace('0.7', '1')),
+                borderWidth: 1
+            }]
+        };
+        
+        const canvas = document.createElement('canvas');
+        canvas.height = 300;
+        container.appendChild(canvas);
+        
+        new Chart(canvas, {
+            type: 'bar',
+            data: chartData,
+            options: getChartOptions(`${month}: ${indicator}`)
+        });
+    });
+}
+
 // Настройки графиков
 function getChartOptions(title) {
     return {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
             title: {
                 display: true,
                 text: title,
                 font: { size: 16 }
             },
-            legend: { display: false }
+            legend: { 
+                display: false 
+            }
         },
         scales: {
-            y: { beginAtZero: true }
+            y: { 
+                beginAtZero: true,
+                title: {
+                    display: true,
+                    text: 'Значение'
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: title.includes(':') ? 'Цех' : 'Месяц'
+                }
+            }
         }
     };
 }
+
+// Генерация квартальных отчетов
+function renderQuarterlyReports() {
+    const container = document.getElementById('quarterlyReports');
+    if (!container) return;
+    
+    container.innerHTML = '<h2>Квартальные отчеты</h2>';
+    
+    Object.entries(appData.quarterlyData).forEach(([quarter, workshops]) => {
+        const quarterDiv = document.createElement('div');
+        quarterDiv.className = 'quarter-report';
+        quarterDiv.innerHTML = `<h3>${quarter}</h3>`;
+        
+        const table = document.createElement('table');
+        table.className = 'report-table';
+        
+        // Заголовки таблицы
+        let headers = ['Цех', ...config.indicators.filter(ind => 
+            ['Выпуск', 'Брак', 'Простой', 'ВаловаяПрибыль', 'ЧистаяПрибыль'].includes(ind)
+        )];
+        
+        let headerRow = table.insertRow();
+        headers.forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header;
+            headerRow.appendChild(th);
+        });
+        
+        // Данные по цехам
+        appData.workshops.forEach(workshop => {
+            const row = table.insertRow();
+            const workshopData = workshops[workshop];
+            
+            headers.forEach(header => {
+                const cell = row.insertCell();
+                if (header === 'Цех') {
+                    cell.textContent = `Цех ${workshop}`;
+                } else {
+                    const value = workshopData[header];
+                    cell.textContent = typeof value === 'number' ? value.toFixed(2) : '-';
+                }
+            });
+        });
+        
+        quarterDiv.appendChild(table);
+        container.appendChild(quarterDiv);
+    });
+}
+
+// Генерация годовых отчетов
+function renderAnnualReports() {
+    const container = document.getElementById('annualReports');
+    if (!container) return;
+    
+    container.innerHTML = '<h2>Годовые отчеты</h2>';
+    
+    const table = document.createElement('table');
+    table.className = 'report-table';
+    
+    // Заголовки таблицы
+    let headers = ['Цех', ...config.indicators.filter(ind => 
+        ['Выпуск', 'Брак', 'Простой', 'ВаловаяПрибыль', 'ЧистаяПрибыль'].includes(ind)
+    )];
+    
+    let headerRow = table.insertRow();
+    headers.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    
+    // Данные по цехам
+    appData.workshops.forEach(workshop => {
+        const row = table.insertRow();
+        const workshopData = appData.annualData[workshop];
+        
+        headers.forEach(header => {
+            const cell = row.insertCell();
+            if (header === 'Цех') {
+                cell.textContent = `Цех ${workshop}`;
+            } else {
+                const value = workshopData[header];
+                cell.textContent = typeof value === 'number' ? value.toFixed(2) : '-';
+            }
+        });
+    });
+    
+    container.appendChild(table);
+}
+
 // Экспорт в PDF
 function exportToPDF() {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Титульная страница
+        doc.setFontSize(22);
+        doc.text('Производственный отчет', 105, 20, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(`Дата формирования: ${new Date().toLocaleDateString()}`, 105, 30, { align: 'center' });
+        
+        // Добавление данных
+        addDataToPDF(doc);
+        
+        // Сохранение PDF
+        doc.save(`production_report_${new Date().toISOString().slice(0,10)}.pdf`);
+        showNotification("PDF успешно сформирован!", "success");
+    } catch (error) {
+        console.error("Ошибка при экспорте в PDF:", error);
+        showNotification("Ошибка при создании PDF", "error");
+    }
+}
+
+// Добавление данных в PDF
+function addDataToPDF(doc) {
+    // Добавляем помесячные данные
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text('Помесячные показатели', 14, 20);
     
-    // Титульная страница
-    doc.setFontSize(22);
-    doc.text('Производственный отчет', 105, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text(`Дата формирования: ${new Date().toLocaleDateString()}`, 105, 30, { align: 'center' });
+    // Добавляем квартальные отчеты
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text('Квартальные отчеты', 14, 20);
     
-    // Добавляем графики и таблицы
-    addChartsToPDF(doc);
-    addTablesToPDF(doc);
-    
-    // Сохраняем PDF
-    doc.save(`production_report_${new Date().toISOString().slice(0,10)}.pdf`);
+    // Добавляем годовой отчет
+    doc.addPage();
+    doc.setFontSize(16);
+    doc.text('Годовой отчет', 14, 20);
 }
 
 // Сохранение данных в localStorage
 function saveData() {
     try {
-        localStorage.setItem('productionData', JSON.stringify({
+        const dataToSave = {
             rawData: appData.rawData,
-            lastUploadedFile: appData.lastUploadedFile
-        }));
+            lastUploadedFile: appData.lastUploadedFile,
+            timestamp: new Date().getTime()
+        };
+        
+        localStorage.setItem('productionData', JSON.stringify(dataToSave));
+        showNotification("Данные успешно сохранены!", "success");
     } catch (error) {
         console.error("Ошибка сохранения данных:", error);
+        showNotification("Ошибка при сохранении данных", "error");
     }
 }
 
-// Загрузка сохраненных данных
+// Загрузка данных из localStorage
 function loadSavedData() {
     try {
         const savedData = localStorage.getItem('productionData');
@@ -366,24 +571,59 @@ function loadSavedData() {
             if (appData.rawData.length > 0) {
                 processData(appData.rawData);
                 updateUI();
-                alert(`Данные успешно загружены из ${appData.lastUploadedFile || 'сохраненной версии'}`);
+                showNotification(`Данные успешно загружены (${parsedData.lastUploadedFile || 'из сохраненной версии'})`, "success");
+            } else {
+                showNotification("Сохраненные данные пусты", "warning");
             }
         } else {
-            alert("Нет сохраненных данных");
+            showNotification("Нет сохраненных данных", "warning");
         }
     } catch (error) {
         console.error("Ошибка загрузки данных:", error);
-        alert("Ошибка при загрузке сохраненных данных");
+        showNotification("Ошибка при загрузке данных", "error");
     }
 }
 
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
-    // Проверка загрузки библиотек
-    if (typeof Chart === 'undefined' || typeof jsPDF === 'undefined') {
-        alert("Ошибка: Не загружены необходимые библиотеки!");
-        return;
+// Загрузка начальных данных
+function loadInitialData() {
+    try {
+        // Можно добавить загрузку тестовых данных по умолчанию
+        if (appData.rawData.length === 0) {
+            showNotification("Загрузите CSV файл с данными", "info");
+        }
+    } catch (error) {
+        console.error("Ошибка загрузки начальных данных:", error);
     }
+}
+
+// Обновление интерфейса
+function updateUI() {
+    renderWorkshopSelect();
+    renderMonthSelect();
+    updateWorkshopCharts(appData.workshops[0]);
+    updateMonthCharts(config.months[0]);
+    renderQuarterlyReports();
+    renderAnnualReports();
+}
+
+// Показать уведомление
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
     
-    initApp();
-});
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('fade-out');
+        setTimeout(() => notification.remove(), 500);
+    }, 3000);
+}
+
+// Настройка обработчиков событий
+function setupEventListeners() {
+    // Добавьте дополнительные обработчики при необходимости
+}
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', initApp);
