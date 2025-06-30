@@ -1,91 +1,132 @@
-<!-- Подключаем библиотеки -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-
-<!-- Проверка загрузки библиотек -->
-<script>
-  window.addEventListener('load', function() {
-    if (typeof Chart === 'undefined') {
-      console.error("Chart.js не загружен!");
-      alert("Ошибка: Библиотека Chart.js не загружена. Проверьте интернет-соединение.");
-    }
-    if (typeof jsPDF === 'undefined') {
-      console.error("jsPDF не загружен!");
-      alert("Ошибка: Библиотека jsPDF не загружена. Проверьте интернет-соединение.");
-    }
-  });
-</script>
-
-
-
-
-
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Аналитика производства</title>
+    <style>
+        /* Basic styles to ensure page displays before CSS loads */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+        }
+    </style>
+    <!-- Подключаем CSS -->
     <link rel="stylesheet" href="style.css">
+    <!-- Подключаем библиотеки с fallback -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <script>
+        // Проверка загрузки библиотек
+        function checkLibs() {
+            if (typeof Chart === 'undefined' || typeof jsPDF === 'undefined') {
+                document.getElementById('loading').innerHTML = `
+                    <div class="error">
+                        <h2>Ошибка загрузки</h2>
+                        <p>Не удалось загрузить необходимые библиотеки. Пожалуйста:</p>
+                        <ol>
+                            <li>Проверьте интернет-соединение</li>
+                            <li>Обновите страницу (F5)</li>
+                        </ol>
+                        <button onclick="window.location.reload()">Обновить страницу</button>
+                    </div>
+                `;
+                return false;
+            }
+            return true;
+        }
+    </script>
 </head>
 <body>
     <div class="container">
-        <h1>Аналитика производственных показателей</h1>
+        <div id="loading" class="loading">Загрузка приложения...</div>
         
-        <div class="controls">
-            <div class="file-upload">
-                <input type="file" id="csvUpload" accept=".csv" style="display: none;">
-                <button onclick="document.getElementById('csvUpload').click()">📁 Загрузить CSV</button>
-                <p id="fileName">Файл не выбран</p>
+        <div id="app" style="display:none;">
+            <h1>Аналитика производственных показателей</h1>
+            
+            <div class="controls">
+                <div class="file-upload">
+                    <input type="file" id="csvUpload" accept=".csv" style="display: none;">
+                    <button onclick="document.getElementById('csvUpload').click()">
+                        <span class="icon">📁</span> Загрузить CSV
+                    </button>
+                    <p id="fileName">Файл не выбран</p>
+                </div>
+                
+                <div class="actions">
+                    <button onclick="saveData()">
+                        <span class="icon">💾</span> Сохранить данные
+                    </button>
+                    <button onclick="loadSavedData()">
+                        <span class="icon">🔄</span> Загрузить сохранённые данные
+                    </button>
+                    <button onclick="exportToPDF()">
+                        <span class="icon">📊</span> Экспорт в PDF
+                    </button>
+                </div>
             </div>
             
-            <div class="actions">
-                <button onclick="saveData()">💾 Сохранить данные</button>
-                <button onclick="loadSavedData()">🔄 Загрузить сохранённые данные</button>
-                <button onclick="exportToPDF()">📊 Экспорт в PDF</button>
-            </div>
-        </div>
-        
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="monthly">Помесячные данные</button>
-            <button class="tab-btn" data-tab="quarterly">Квартальные отчёты</button>
-            <button class="tab-btn" data-tab="annual">Годовые отчёты</button>
-        </div>
-        
-        <div id="monthly" class="tab-content active">
-            <div class="chart-section">
-                <h2>Графики по цехам</h2>
-                <div class="workshop-selector">
-                    <label for="workshopSelect">Выберите цех:</label>
-                    <select id="workshopSelect"></select>
-                </div>
-                <div class="charts-container" id="workshopCharts"></div>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="monthly">Помесячные данные</button>
+                <button class="tab-btn" data-tab="quarterly">Квартальные отчёты</button>
+                <button class="tab-btn" data-tab="annual">Годовые отчёты</button>
             </div>
             
-            <div class="chart-section">
-                <h2>Графики по месяцам</h2>
-                <div class="month-selector">
-                    <label for="monthSelect">Выберите месяц:</label>
-                    <select id="monthSelect"></select>
+            <div id="monthly" class="tab-content active">
+                <div class="chart-section">
+                    <h2>Графики по цехам</h2>
+                    <div class="workshop-selector">
+                        <label for="workshopSelect">Выберите цех:</label>
+                        <select id="workshopSelect"></select>
+                    </div>
+                    <div class="charts-container" id="workshopCharts"></div>
                 </div>
-                <div class="charts-container" id="monthCharts"></div>
+                
+                <div class="chart-section">
+                    <h2>Графики по месяцам</h2>
+                    <div class="month-selector">
+                        <label for="monthSelect">Выберите месяц:</label>
+                        <select id="monthSelect"></select>
+                    </div>
+                    <div class="charts-container" id="monthCharts"></div>
+                </div>
             </div>
-        </div>
-        
-        <div id="quarterly" class="tab-content">
-            <div class="report-container" id="quarterlyReports"></div>
-        </div>
-        
-        <div id="annual" class="tab-content">
-            <div class="report-container" id="annualReports"></div>
+            
+            <div id="quarterly" class="tab-content">
+                <div class="report-container" id="quarterlyReports"></div>
+            </div>
+            
+            <div id="annual" class="tab-content">
+                <div class="report-container" id="annualReports"></div>
+            </div>
         </div>
     </div>
 
+    <!-- Подключаем основной скрипт -->
     <script src="script.js"></script>
+    <script>
+        // Инициализация после загрузки страницы
+        window.addEventListener('load', function() {
+            if (checkLibs()) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                initApp();
+            }
+        });
+    </script>
 </body>
 </html>
